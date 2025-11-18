@@ -116,14 +116,14 @@ def get_issues(repo, start: datetime, end: datetime) -> tuple[list[str], str]:
 
 
 def format_activities(activities: dict[str, list[str]], target_date: datetime) -> str:
-    """活動をMarkdown形式にフォーマット"""
+    """活動をプレーンテキスト形式にフォーマット"""
     if not activities:
         return ""
 
-    lines = [f"## GitHub Activity ({target_date.strftime('%Y-%m-%d')})", ""]
+    lines = [f"GitHub Activity ({target_date.strftime('%Y-%m-%d')})", ""]
 
     for repo_name, items in sorted(activities.items()):
-        lines.append(f"### {repo_name}")
+        lines.append(f"[{repo_name}]")
         lines.extend(items)
         lines.append("")
 
