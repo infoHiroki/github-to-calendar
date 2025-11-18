@@ -4,7 +4,12 @@ on:
   schedule:
     # 毎日 7:00 JST (22:00 UTC 前日)
     - cron: '0 22 * * *'
-  workflow_dispatch:  # 手動実行用
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: '対象日 (YYYY-MM-DD形式、空欄で前日)'
+        required: false
+        type: string
 
 jobs:
   sync:
@@ -27,4 +32,5 @@ jobs:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           CALENDAR_ID: ${{ secrets.CALENDAR_ID }}
           TIMEZONE: Asia/Tokyo
+          TARGET_DATE: ${{ inputs.target_date }}
         run: python src/main.py

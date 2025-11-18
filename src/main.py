@@ -187,7 +187,24 @@ def update_calendar(credentials_json: str, calendar_id: str, target_date: dateti
         print(f"Updated event: {title}")
         return ""
 
-    return "No matching event found"
+    # イベントがない場合は新規作成
+    date_str = target_date.strftime("%Y-%m-%d")
+    new_event = {
+        "summary": date_str,
+        "description": content,
+        "start": {"date": date_str},
+        "end": {"date": date_str},
+    }
+
+    try:
+        created = service.events().insert(
+            calendarId=calendar_id,
+            body=new_event
+        ).execute()
+        print(f"Created event: {date_str}")
+        return ""
+    except HttpError as e:
+        return f"Failed to create event: {e}"
 
 
 def main() -> int:
@@ -212,10 +229,18 @@ def main() -> int:
         return 1
 
     timezone = os.environ.get("TIMEZONE", "Asia/Tokyo")
-
-    # 対象日（前日）
     tz = ZoneInfo(timezone)
-    target_date = datetime.now(tz) - timedelta(days=1)
+
+    # 対象日（TARGET_DATE指定 or 前日）
+    target_date_str = os.environ.get("TARGET_DATE")
+    if target_date_str:
+        try:
+            target_date = datetime.strptime(target_date_str, "%Y-%m-%d").replace(tzinfo=tz)
+        except ValueError:
+            print(f"Error: Invalid TARGET_DATE format: {target_date_str} (expected YYYY-MM-DD)", file=sys.stderr)
+            return 1
+    else:
+        target_date = datetime.now(tz) - timedelta(days=1)
 
     print(f"Fetching activities for {target_date.strftime('%Y-%m-%d')}")
 
