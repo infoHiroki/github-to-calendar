@@ -1,7 +1,7 @@
 __pycache__/
 *.py[cod]
 .env
+.env.*
 *.json
-!requirements.txt
 .venv/
 venv/
