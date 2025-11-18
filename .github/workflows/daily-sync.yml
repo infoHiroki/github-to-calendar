@@ -1,0 +1,30 @@
+name: Daily GitHub to Calendar Sync
+
+on:
+  schedule:
+    # 毎日 7:00 JST (22:00 UTC 前日)
+    - cron: '0 22 * * *'
+  workflow_dispatch:  # 手動実行用
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          CALENDAR_ID: ${{ secrets.CALENDAR_ID }}
+          TIMEZONE: Asia/Tokyo
+        run: python src/main.py
