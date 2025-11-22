@@ -9,16 +9,20 @@ import json
 import base64
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from dotenv import load_dotenv
 
 from github import Github, GithubException
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+# .envファイルから環境変数を読み込む
+load_dotenv()
+
 
 def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, list[str]], str]:
     """
-    指定日のGitHub活動を取得
+    指定日のGitHub活動を取得（Search API使用）
     Returns: (activities, error)
     """
     try:
@@ -28,38 +32,67 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
         return {}, f"GitHub auth failed: {e}"
 
     activities: dict[str, list[str]] = {}
+    username = user.login
 
     start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
 
+    date_str = target_date.strftime("%Y-%m-%d")
+
     try:
-        repos = list(user.get_repos(affiliation="owner,collaborator"))
+        # 1. Search APIでコミットを検索 (author-dateとcommitter-dateの両方)
+        # GitHubの貢献グラフに表示されるのはauthor-dateベース
+        commit_query = f"author:{username} author-date:{date_str}"
+        commits = g.search_commits(query=commit_query)
+
+        for commit in commits:
+            # html_urlから抽出:リポジトリ名を取得 https://github.com/owner/repo/commit/sha
+            parts = commit.html_url.split('/')
+            repo_name = f"{parts[3]}/{parts[4]}"
+
+            if repo_name not in activities:
+                activities[repo_name] = []
+
+            msg = commit.commit.message.split('\n')[0][:50]
+            activities[repo_name].append(f"- {msg} (commit)")
+
+        # 2. Search APIでPull Requestsを検索
+        pr_query = f"author:{username} created:{date_str} type:pr"
+        prs = g.search_issues(query=pr_query)
+
+        for pr in prs:
+            repo_name = pr.repository.full_name
+            if repo_name not in activities:
+                activities[repo_name] = []
+
+            # PRの状態を確認
+            if pr.state == "closed" and pr.pull_request:
+                # merged_at属性が存在するか確認
+                merged_at = getattr(pr.pull_request, 'merged_at', None)
+                if merged_at and start <= merged_at < end:
+                    activities[repo_name].append(f"- PR #{pr.number}: {pr.title} (merged)")
+                else:
+                    activities[repo_name].append(f"- PR #{pr.number}: {pr.title} (created)")
+            else:
+                activities[repo_name].append(f"- PR #{pr.number}: {pr.title} (created)")
+
+        # 3. Search APIでIssuesを検索
+        issue_query = f"author:{username} created:{date_str} type:issue"
+        issues = g.search_issues(query=issue_query)
+
+        for issue in issues:
+            repo_name = issue.repository.full_name
+            if repo_name not in activities:
+                activities[repo_name] = []
+
+            # Issueの状態
+            if issue.state == "closed" and issue.closed_at and start <= issue.closed_at < end:
+                activities[repo_name].append(f"- Issue #{issue.number}: {issue.title} (closed)")
+            else:
+                activities[repo_name].append(f"- Issue #{issue.number}: {issue.title} (created)")
+
     except GithubException as e:
-        return {}, f"Failed to get repos: {e}"
-
-    for repo in repos:
-        repo_activities = []
-
-        # Commits
-        commits, err = get_commits(repo, user.login, start, end)
-        if err:
-            print(f"Warning: {repo.full_name} commits: {err}", file=sys.stderr)
-        repo_activities.extend(commits)
-
-        # Pull Requests
-        prs, err = get_pull_requests(repo, start, end)
-        if err:
-            print(f"Warning: {repo.full_name} PRs: {err}", file=sys.stderr)
-        repo_activities.extend(prs)
-
-        # Issues
-        issues, err = get_issues(repo, start, end)
-        if err:
-            print(f"Warning: {repo.full_name} issues: {err}", file=sys.stderr)
-        repo_activities.extend(issues)
-
-        if repo_activities:
-            activities[repo.full_name] = repo_activities
+        return {}, f"Failed to search activities: {e}"
 
     return activities, ""
 
