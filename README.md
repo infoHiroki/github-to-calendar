@@ -48,31 +48,38 @@ github-to-calendar/
 ## 処理フロー
 
 1. **活動取得** (GitHub API)
-   - 前日の commit 一覧を取得
-   - 前日の PR (作成・マージ) を取得
-   - 前日の issue (作成・クローズ) を取得
+   - 前日の commit を取得（範囲クエリ）
+   - 前日の PR (作成・マージ) を取得（両方を検索）
+   - 前日の issue (作成・クローズ) を取得（両方を検索）
 
 2. **フォーマット**
-   - Logseq風の箇条書き形式に整形
+   - コミット数を集計し、主要なコミット（最大2件）を選定
    - リポジトリごとにグループ化
+   - PR/Issueを追記
 
 3. **カレンダー更新** (Google Calendar API)
    - 対象日のイベントを検索（タイトルが数字のみ）
    - 説明欄に活動内容を追記
+   - 見つからない場合は新規作成（YYYY-MM-DD形式）
 
 ## 出力例
 
 ```
-## GitHub Activity (2024-01-15)
+GitHub Activity (2024-01-15)
 
-### user/project-a
-- feat: ユーザー認証機能を追加 (commit)
+[user/project-a]
+- 5 commits: feat: ユーザー認証機能を追加, fix: ログインバグ修正
 - PR #12: ログイン画面の実装 (merged)
 
-### user/project-b
-- fix: バグ修正 (commit)
+[user/project-b]
+- 3 commits: fix: バグ修正, docs: README更新
 - Issue #5: パフォーマンス改善 (closed)
 ```
+
+**コミットの表示ルール**:
+- リポジトリごとにコミット数を集計
+- 主要なコミット（最大2件）のみを表示
+- 優先順位: `feat` > `fix` > その他
 
 ## 環境変数
 
