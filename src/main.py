@@ -26,7 +26,7 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
     Returns: (activities, error)
     """
     try:
-        g = Github(token)
+        g = Github(token, per_page=100)
         user = g.get_user()
     except GithubException as e:
         return {}, f"GitHub auth failed: {e}"
@@ -45,7 +45,9 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
         commit_query = f"author:{username} author-date:{date_str}"
         commits = g.search_commits(query=commit_query)
 
+        commit_count = 0
         for commit in commits:
+            commit_count += 1
             # html_urlから抽出:リポジトリ名を取得 https://github.com/owner/repo/commit/sha
             parts = commit.html_url.split('/')
             repo_name = f"{parts[3]}/{parts[4]}"
@@ -56,11 +58,15 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
             msg = commit.commit.message.split('\n')[0][:50]
             activities[repo_name].append(f"- {msg} (commit)")
 
+        print(f"Debug: Found {commit_count} commits for {date_str}")
+
         # 2. Search APIでPull Requestsを検索
         pr_query = f"author:{username} created:{date_str} type:pr"
         prs = g.search_issues(query=pr_query)
 
+        pr_count = 0
         for pr in prs:
+            pr_count += 1
             repo_name = pr.repository.full_name
             if repo_name not in activities:
                 activities[repo_name] = []
@@ -76,11 +82,15 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
             else:
                 activities[repo_name].append(f"- PR #{pr.number}: {pr.title} (created)")
 
+        print(f"Debug: Found {pr_count} pull requests for {date_str}")
+
         # 3. Search APIでIssuesを検索
         issue_query = f"author:{username} created:{date_str} type:issue"
         issues = g.search_issues(query=issue_query)
 
+        issue_count = 0
         for issue in issues:
+            issue_count += 1
             repo_name = issue.repository.full_name
             if repo_name not in activities:
                 activities[repo_name] = []
@@ -90,6 +100,8 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
                 activities[repo_name].append(f"- Issue #{issue.number}: {issue.title} (closed)")
             else:
                 activities[repo_name].append(f"- Issue #{issue.number}: {issue.title} (created)")
+
+        print(f"Debug: Found {issue_count} issues for {date_str}")
 
     except GithubException as e:
         return {}, f"Failed to search activities: {e}"
