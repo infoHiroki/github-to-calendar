@@ -49,7 +49,7 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
         for commit in commits:
             commit_count += 1
             parts = commit.html_url.split('/')
-            repo_name = f"{parts[3]}/{parts[4]}"
+            repo_name = parts[4]  # リポジトリ名のみ
 
             if repo_name not in repo_commits:
                 repo_commits[repo_name] = []
@@ -111,8 +111,8 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
                     continue
                 seen_prs.add(pr.number)
                 pr_count += 1
-                
-                repo_name = pr.repository.full_name
+
+                repo_name = pr.repository.name  # リポジトリ名のみ
                 if repo_name not in activities:
                     activities[repo_name] = []
 
@@ -154,8 +154,8 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
                     continue
                 seen_issues.add(issue.number)
                 issue_count += 1
-                
-                repo_name = issue.repository.full_name
+
+                repo_name = issue.repository.name  # リポジトリ名のみ
                 if repo_name not in activities:
                     activities[repo_name] = []
 
@@ -192,11 +192,33 @@ def format_activities(activities: dict[str, list[str]], target_date: datetime) -
     return "\n".join(lines)
 
 
-def update_calendar(credentials_json: str, calendar_id: str, target_date: datetime, content: str) -> str:
+def count_activities(activities: dict[str, list[str]]) -> int:
+    """活動の総数をカウント"""
+    return sum(len(items) for items in activities.values())
+
+
+def get_color_id(activity_count: int) -> str:
+    """活動数に応じた色IDを返す"""
+    if activity_count == 0:
+        return "8"  # グレー
+    elif activity_count <= 3:
+        return "9"  # 青
+    elif activity_count <= 10:
+        return "10"  # 緑
+    elif activity_count <= 20:
+        return "6"  # オレンジ
+    else:
+        return "11"  # 赤
+
+
+def update_calendar(credentials_json: str, calendar_id: str, target_date: datetime, content: str, activities: dict[str, list[str]]) -> str:
     """
     カレンダーイベントの説明欄を更新
     Returns: error message (empty if success)
     """
+    # 活動数を計算して色を決定
+    activity_count = count_activities(activities)
+    color_id = get_color_id(activity_count)
     # 認証
     try:
         creds_dict = json.loads(base64.b64decode(credentials_json))
@@ -226,16 +248,17 @@ def update_calendar(credentials_json: str, calendar_id: str, target_date: dateti
     except HttpError as e:
         return f"Failed to list events: {e}"
 
-    # タイトルが数字のみのイベントを探す
+    # タイトルが"GitHub"のイベントを探す
     for event in events.get("items", []):
         title = event.get("summary", "")
-        if not title.isdigit():
+        if title != "GitHub":
             continue
 
-        # 説明欄に追記
+        # 説明欄に追記 + 色を更新
         current_desc = event.get("description", "")
         separator = "\n\n---\n\n" if current_desc else ""
         event["description"] = current_desc + separator + content
+        event["colorId"] = color_id
 
         try:
             service.events().update(
@@ -252,10 +275,11 @@ def update_calendar(credentials_json: str, calendar_id: str, target_date: dateti
     # イベントがない場合は新規作成
     date_str = target_date.strftime("%Y-%m-%d")
     new_event = {
-        "summary": date_str,
+        "summary": "GitHub",
         "description": content,
         "start": {"date": date_str},
         "end": {"date": date_str},
+        "colorId": color_id,
     }
 
     try:
@@ -321,7 +345,7 @@ def main() -> int:
     print(content)
 
     # カレンダー更新
-    err = update_calendar(google_creds, calendar_id, target_date, content)
+    err = update_calendar(google_creds, calendar_id, target_date, content, activities)
     if err:
         print(f"Error: {err}", file=sys.stderr)
         return 1
