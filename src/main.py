@@ -20,17 +20,17 @@ from googleapiclient.errors import HttpError
 load_dotenv()
 
 
-def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, list[str]], str]:
+def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, list[str]], int, str]:
     """
     指定日のGitHub活動を取得（Search API使用）
-    Returns: (activities, error)
+    Returns: (activities, total_count, error)
     """
     try:
         g = Github(token, per_page=100)
         user = g.get_user()
         username = user.login
     except GithubException as e:
-        return {}, f"GitHub auth failed: {e}"
+        return {}, 0, f"GitHub auth failed: {e}"
 
     activities: dict[str, list[str]] = {}
     
@@ -172,9 +172,11 @@ def get_github_activities(token: str, target_date: datetime) -> tuple[dict[str, 
         print(f"Debug: Found {issue_count} issues (unique) for {date_str}")
 
     except GithubException as e:
-        return {}, f"Failed to search activities: {e}"
+        return {}, 0, f"Failed to search activities: {e}"
 
-    return activities, ""
+    # 総活動数を計算
+    total_count = commit_count + pr_count + issue_count
+    return activities, total_count, ""
 
 
 def format_activities(activities: dict[str, list[str]], target_date: datetime) -> str:
@@ -198,27 +200,24 @@ def count_activities(activities: dict[str, list[str]]) -> int:
 
 
 def get_color_id(activity_count: int) -> str:
-    """活動数に応じた色IDを返す"""
+    """活動数に応じた色IDを返す（4段階）"""
     if activity_count == 0:
         return "8"  # グレー
     elif activity_count <= 3:
         return "9"  # 青
     elif activity_count <= 10:
         return "10"  # 緑
-    elif activity_count <= 20:
-        return "6"  # オレンジ
     else:
-        return "11"  # 赤
+        return "6"  # オレンジ（11件以上）
 
 
-def update_calendar(credentials_json: str, calendar_id: str, target_date: datetime, content: str, activities: dict[str, list[str]]) -> str:
+def update_calendar(credentials_json: str, calendar_id: str, target_date: datetime, content: str, total_count: int) -> str:
     """
     カレンダーイベントの説明欄を更新
     Returns: error message (empty if success)
     """
-    # 活動数を計算して色を決定
-    activity_count = count_activities(activities)
-    color_id = get_color_id(activity_count)
+    # 活動数に応じて色を決定
+    color_id = get_color_id(total_count)
     # 認証
     try:
         creds_dict = json.loads(base64.b64decode(credentials_json))
@@ -331,7 +330,7 @@ def main() -> int:
     print(f"Fetching activities for {target_date.strftime('%Y-%m-%d')}")
 
     # 活動取得
-    activities, err = get_github_activities(github_token, target_date)
+    activities, total_count, err = get_github_activities(github_token, target_date)
     if err:
         print(f"Error: {err}", file=sys.stderr)
         return 1
@@ -345,7 +344,7 @@ def main() -> int:
     print(content)
 
     # カレンダー更新
-    err = update_calendar(google_creds, calendar_id, target_date, content, activities)
+    err = update_calendar(google_creds, calendar_id, target_date, content, total_count)
     if err:
         print(f"Error: {err}", file=sys.stderr)
         return 1
