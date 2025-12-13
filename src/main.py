@@ -200,15 +200,13 @@ def count_activities(activities: dict[str, list[str]]) -> int:
 
 
 def get_color_id(activity_count: int) -> str:
-    """活動数に応じた色IDを返す（4段階）"""
-    if activity_count == 0:
-        return "8"  # グレー
-    elif activity_count <= 3:
-        return "9"  # 青
-    elif activity_count <= 10:
-        return "10"  # 緑
+    """活動数に応じた色IDを返す（3段階・暖色グラデーション）"""
+    if activity_count <= 10:
+        return "5"  # バナナ（黄）
+    elif activity_count <= 20:
+        return "6"  # みかん（オレンジ）
     else:
-        return "6"  # オレンジ（11件以上）
+        return "11"  # トマト（赤）
 
 
 def update_calendar(credentials_json: str, calendar_id: str, target_date: datetime, content: str, total_count: int) -> str:
